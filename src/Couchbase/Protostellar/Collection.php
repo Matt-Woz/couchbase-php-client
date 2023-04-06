@@ -442,7 +442,7 @@ class Collection implements CollectionInterface
             $encoded[] = ['opcode' => 'get', 'isXattr' => true, 'path' => LookupInMacro::EXPIRY_TIME];
         }
         $exportedOptions = LookupInOptions::export($options);
-        $specsReq = KVConverter::getLookupInSpec($encoded);
+        [$specsReq, $order] = KVConverter::getLookupInSpec($encoded);
         $request = [
             "bucket_name" => $this->bucketName,
             "scope_name" => $this->scopeName,
@@ -458,7 +458,8 @@ class Collection implements CollectionInterface
             SharedUtils::createProtostellarRequest(new LookupInRequest($request), true, $timeout),
             [$this->client->kv(), 'LookupIn']
         );
-        $fields = KVConverter::convertLookupInRes(SharedUtils::toArray($res->getSpecs()), $specsReq);
+
+        $fields = KVConverter::convertLookupInRes(SharedUtils::toArray($res->getSpecs()), $specsReq, $order);
         return new LookupInResult(
             [
             "id" => $key,

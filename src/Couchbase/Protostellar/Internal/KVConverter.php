@@ -194,6 +194,7 @@ class KVConverter
 
     public static function getLookupInSpec(array $exportedSpecs): array
     {
+        [$orderedSpecs, $order] = self::orderLookupInSpecs($exportedSpecs);
         $opcodeToSpecOperation = [
             'get' => Spec\Operation::OPERATION_GET,
             'getDocument' => Spec\Operation::OPERATION_GET,
@@ -201,7 +202,7 @@ class KVConverter
             'getCount' => Spec\Operation::OPERATION_COUNT
         ];
         $specs = [];
-        foreach ($exportedSpecs as $spec) {
+        foreach ($orderedSpecs as $spec) {
             $newSpec = new Spec(
                 [
                     "operation" => $opcodeToSpecOperation[$spec['opcode']],
@@ -211,7 +212,26 @@ class KVConverter
             );
             $specs[] = $newSpec;
         }
-        return $specs;
+        return [$specs, $order];
+    }
+
+    private static function orderLookupInSpecs(array $exportedSpecs): array
+    {
+        for ($i = 0; $i < sizeof($exportedSpecs); $i++) {
+            $exportedSpecs[$i]["order"] = $i;
+        }
+        usort(
+            $exportedSpecs,
+            function ($left, $right) {
+                return $right["isXattr"] - $left["isXattr"];
+            }
+        );
+        $order = [];
+        for ($i = 0; $i < sizeof($exportedSpecs); $i++) {
+            $order[] = $exportedSpecs[$i]["order"];
+            unset($exportedSpecs[$i]["order"]);
+        }
+        return [$exportedSpecs, $order];
     }
 
     public static function getMutateInSpec(array $exportedSpecs): array
@@ -258,8 +278,10 @@ class KVConverter
         }
     }
 
-    public static function convertLookupInRes(array $specs, array $specsReq): array
+    public static function convertLookupInRes(array $specs, array $specsReq, array $order): array
     {
+        $specs = self::orderLookupRes($specs, $order);
+        $specsReq = self::orderLookupRes($specsReq, $order);
         $fields = [];
         for ($i = 0; $i < count($specs); $i++) {
             $res = [];
@@ -269,12 +291,24 @@ class KVConverter
             } else {
                 $res["exists"] = null;
             }
-            if (!empty($specs[$i]->getContent())) {
-                $res["value"] = $specs[$i]->getContent();
-            }
+            $res["value"] = $specs[$i]->getContent();
             $fields[] = $res;
         }
         return $fields;
+    }
+
+    private static function orderLookupRes(array $specs, array $order): array
+    {
+        $temp = [];
+        for ($i = 0; $i < sizeof($specs); $i++) {
+            $temp[$order[$i]] = $specs[$i];
+        }
+
+        for ($i = 0; $i < sizeof($specs); $i++) {
+            $specs[$i] = $temp[$i];
+            $order[$i] = $i;
+        }
+        return $specs;
     }
 
     public static function convertMutateInRes(array $specs, array $specsReq): array
