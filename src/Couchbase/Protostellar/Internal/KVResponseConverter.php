@@ -4,9 +4,11 @@ namespace Couchbase\Protostellar\Internal;
 
 use Couchbase\CounterResult;
 use Couchbase\ExistsResult;
+use Couchbase\GetAllReplicasOptions;
 use Couchbase\GetAndLockOptions;
 use Couchbase\GetAndTouchOptions;
 use Couchbase\GetOptions;
+use Couchbase\GetReplicaResult;
 use Couchbase\GetResult;
 use Couchbase\LookupInOptions;
 use Couchbase\LookupInResult;
@@ -155,6 +157,35 @@ class KVResponseConverter
                 "deleted" => false //TODO: No Deleted flag from grpc response
             ]
         );
+    }
+
+    public static function convertQueryResult(array $response): array
+    {
+        $finalArray = [];
+        foreach ($response as $result) {
+            $finalArray["rows"][] = SharedUtils::toArray($result->getRows());
+        }
+        $finalArray["rows"] = call_user_func_array('array_merge', $finalArray["rows"]);
+        $finalArray["meta"] = self::convertMetaData(end($response)->getMetaData());
+        return $finalArray;
+    }
+
+    public static function convertGetAllReplicasResult(string $key, array $response, GetAllReplicasOptions $options = null): array
+    {
+        $finalArray = [];
+        foreach ($response as $result) {
+            $finalArray[] = new GetReplicaResult(
+                [
+                    "id" => $key,
+                    "cas" => strval($result->getCas()),
+                    "value" => $result->getContent(),
+                    "flags" => $result->getContentFlags(),
+                    "isReplica" => $result->GetIsReplica()
+                ],
+                GetAllReplicasOptions::getTranscoder($options)
+            );
+        }
+        return $finalArray;
     }
 
     public static function convertCounterResult(string $key, mixed $result): CounterResult
