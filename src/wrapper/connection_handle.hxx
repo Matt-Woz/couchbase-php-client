@@ -249,6 +249,15 @@ class connection_handle
                                        const zval* options);
 
     COUCHBASE_API
+    core_error_info document_create_scan(zval* return_value,
+                                         zval* resource,
+                                         const zend_string* bucket,
+                                         const zend_string* scope,
+                                         const zend_string* collection,
+                                         const zval* scan_type,
+                                         const zval* options);
+
+    COUCHBASE_API
     core_error_info document_get_multi(zval* return_value,
                                        const zend_string* bucket,
                                        const zend_string* scope,

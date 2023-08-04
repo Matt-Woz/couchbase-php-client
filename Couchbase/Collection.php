@@ -511,6 +511,35 @@ class Collection implements CollectionInterface
     }
 
     /**
+     * @throws InvalidArgumentException
+     */
+    public function scan(ScanType $scanType, ScanOptions $options = null): ScanResultIterator
+    {
+        if ($scanType instanceof RangeScan) {
+            $type = RangeScan::export($scanType);
+        } else if ($scanType instanceof SamplingScan) {
+            $type = SamplingScan::export($scanType);
+        } else if ($scanType instanceof PrefixScan) {
+            $type = PrefixScan::export($scanType);
+        } else {
+            throw new InvalidArgumentException("ScanType must be a RangeScan, SamplingScan, or PrefixScan");
+        }
+        $core_scan_result = Extension\scanCreate(
+            $this->core,
+            $this->bucketName,
+            $this->scopeName,
+            $this->name,
+            $type,
+            ScanOptions::export($options)
+        );
+
+        return new ScanResultIterator(
+            $core_scan_result,
+            ScanOptions::getTranscoder($options),
+        );
+    }
+
+    /**
      * Retrieves a group of documents. If the document does not exist, it will not raise an exception, but rather fill
      * non-null value in error() property of the corresponding result object.
      *
