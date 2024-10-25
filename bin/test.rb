@@ -68,6 +68,26 @@ def capture(*args)
   output
 end
 
+def find_extension(name_pattern, project_root, module_location_candidates)
+  module_names = [
+    "#{name_pattern}.#{RbConfig::CONFIG['DLEXT']}",
+    "#{name_pattern}.#{RbConfig::CONFIG['SOEXT']}",
+    "#{name_pattern}.so",
+  ].map { |name| ["php_#{name}", name] }.flatten
+
+  module_locations = module_names.map do |name|
+    [
+      "#{project_root}/modules/#{name}",
+      "#{project_root}/#{name}",
+    ] + Dir["#{project_root}/couchbase*/**/#{name}"]
+  end.flatten.sort.uniq
+
+  module_locations.each { |path| module_location_candidates << path }
+  module_locations.find { |path| File.exist?(path) }
+end
+
+
+
 if ENV["CB_VALGRIND"]
   ENV["USE_ZEND_ALLOC"] = 0
   ENV["ZEND_DONT_UNLOAD_MODULES"] = 1
@@ -117,23 +137,25 @@ unless File.file?(php_unit_phar)
   run("curl -L -o #{php_unit_phar.shellescape} #{php_unit_url}")
 end
 
-module_names = [
-  "couchbase.#{RbConfig::CONFIG['DLEXT']}",
-  "couchbase.#{RbConfig::CONFIG['SOEXT']}",
-  "couchbase.so",
-].map { |name| ["php_#{name}", name] }.flatten
-module_locations = module_names.map do |name|
-  [
-    "#{project_root}/modules/#{name}",
-    "#{project_root}/#{name}",
-  ] + Dir["#{project_root}/couchbase*/**/#{name}"]
-end.flatten.sort.uniq
+module_location_candidates = []
 
-couchbase_ext = module_locations.find { |path| File.exist?(path) }
-if couchbase_ext
-  puts "Found module: #{couchbase_ext}"
+unversioned_ext = find_extension("couchbase", project_root, module_location_candidates)
+versioned_ext = find_extension("couchbase_#{ENV['CB_ABI_VERSION']}", project_root, module_location_candidates)
+
+extra_php_args = []
+
+if unversioned_ext && versioned_ext
+  puts "Found modules: #{unversioned_ext} and #{versioned_ext}"
+  extra_php_args << "-d" << "extension=#{unversioned_ext}"
+  extra_php_args << "-d" << "extension=#{versioned_ext}"
+elsif unversioned_ext
+  puts "Found module #{unversioned_ext}"
+    extra_php_args << "-d" << "extension=#{unversioned_ext}"
+elsif  versioned_ext
+  puts "Found module #{versioned_ext}"
+    extra_php_args << "-d" << "extension=#{versioned_ext}"
 else
-  abort "Unable to find the module. Candidates: #{module_locations.inspect}"
+  abort "Unable to find the module. Candidates: #{module_location_candidates.inspect}"
 end
 
 tests = ARGV.to_a
@@ -157,21 +179,19 @@ if (log_level = ENV.fetch("TEST_LOG_LEVEL", nil))
   log_args << "-d" << "couchbase.log_level=#{log_level}"
 end
 
-extra_php_args = []
 if windows?
   extra_php_args << "-d" << "extension=sockets"
   extra_php_args << "-d" << "extension=mbstring"
 end
 
 Dir.chdir(project_root) do
-  run(CB_PHP_EXECUTABLE, *extra_php_args, "-d", "extension=#{couchbase_ext}", "-m")
-  puts capture(CB_PHP_EXECUTABLE, *extra_php_args, "-d", "extension=#{couchbase_ext}", "-i")
+  run(CB_PHP_EXECUTABLE, *extra_php_args, "-m")
+  puts capture(CB_PHP_EXECUTABLE, *extra_php_args, "-i")
     .split("\n")
     .grep(/couchbase/i)
     .join("\n")
   run(CB_PHP_EXECUTABLE,
       *extra_php_args,
-      "-d", "extension=#{couchbase_ext}",
       "-d", "couchbase.log_php_log_err=0",
       *log_args,
       php_unit_phar,

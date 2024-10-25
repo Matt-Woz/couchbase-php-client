@@ -114,6 +114,9 @@ if(WIN32)
   target_compile_definitions(couchbase PRIVATE NOMINMAX)
   target_link_options(couchbase PUBLIC "${COUCHBASE_PHP_LIB}")
 endif()
+
+set_target_properties(couchbase PROPERTIES C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden)
+
 if(COUCHBASE_PHP_LIBDIR)
   add_custom_command(
     TARGET couchbase
